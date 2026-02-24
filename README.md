@@ -1,6 +1,6 @@
 # Better USOS
-
-Nowoczesny interfejs dla USOSweb — browser extension (Plasmo + React + TypeScript).
+> [!IMPORTANT]
+> Extension was 99% vibe coded. 
 
 ## Setup
 
