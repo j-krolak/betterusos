@@ -1,0 +1,39 @@
+{
+  "name": "better-usos",
+  "displayName": "Better USOS",
+  "version": "1.0.0",
+  "description": "Nowoczesny interfejs dla USOSweb",
+  "author": "",
+  "scripts": {
+    "dev": "plasmo dev",
+    "dev:firefox": "plasmo dev --target=firefox-mv2",
+    "build": "plasmo build",
+    "build:firefox": "plasmo build --target=firefox-mv2",
+    "package": "plasmo package"
+  },
+  "dependencies": {
+    "plasmo": "^0.90.5",
+    "react": "18.3.1",
+    "react-dom": "18.3.1"
+  },
+  "devDependencies": {
+    "@types/chrome": "0.0.287",
+    "@types/node": "22.10.1",
+    "@types/react": "18.3.12",
+    "@types/react-dom": "18.3.1",
+    "typescript": "5.7.2"
+  },
+  "manifest": {
+    "permissions": [
+      "storage"
+    ],
+    "host_permissions": [
+      "https://*.edu.pl/*"
+    ],
+    "browser_specific_settings": {
+      "gecko": {
+        "id": "betterusos@example.com"
+      }
+    }
+  }
+}

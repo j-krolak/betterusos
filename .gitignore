@@ -1,0 +1,9 @@
+node_modules/
+build/
+.plasmo/
+*.zip
+.env
+.DS_Store
+
+*.html
+*_files/
