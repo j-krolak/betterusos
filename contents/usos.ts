@@ -132,7 +132,10 @@ function refreshStatisticsPanel(): void {
   const panel = document.querySelector("#bu-stats-panel-content");
   if (!panel) return;
   const stats = loadStatistics();
-  panel.innerHTML = buildStatsPanelHTML(stats);
+  while (panel.firstChild) panel.removeChild(panel.firstChild);
+  const statsHtml = buildStatsPanelHTML(stats);
+  // Safe: buildStatsPanelHTML używa escapeHTML na wszystkich dynamicznych danych
+  panel.insertAdjacentHTML("afterbegin", statsHtml);
   attachStatCardListeners(panel);
 }
 
@@ -232,20 +235,35 @@ function showStatsModal(type: "defeated" | "fail"): void {
 
   const overlay = document.createElement("div");
   overlay.className = "bu-stats-modal-overlay";
-  overlay.innerHTML = `
-    <div class="bu-stats-modal ${isDefeated ? "bu-modal-defeated" : "bu-modal-fail"}">
-      <div class="bu-modal-header">
-        <div>
-          <div class="bu-modal-title">${title}</div>
-          <div class="bu-modal-subtitle">${subtitle}</div>
-        </div>
-        <button class="bu-modal-close" type="button" aria-label="Zamknij">${svgClose}</button>
-      </div>
-      <div class="bu-modal-body">
-        ${buildEntryListHTML(entries, isDefeated ? "Brak defeated ocen – odsłoń oceny ze sprawdzianów!" : "Brak failed ocen – tak trzymaj!")}
-      </div>
-    </div>
-  `;
+  // Tworzymy modal bez innerHTML
+  const modal = document.createElement("div");
+  modal.className = `bu-stats-modal ${isDefeated ? "bu-modal-defeated" : "bu-modal-fail"}`;
+  const header = document.createElement("div");
+  header.className = "bu-modal-header";
+  const headerLeft = document.createElement("div");
+  const titleDiv = document.createElement("div");
+  titleDiv.className = "bu-modal-title";
+  titleDiv.textContent = title;
+  const subtitleDiv = document.createElement("div");
+  subtitleDiv.className = "bu-modal-subtitle";
+  subtitleDiv.textContent = subtitle;
+  headerLeft.appendChild(titleDiv);
+  headerLeft.appendChild(subtitleDiv);
+  const closeBtn = document.createElement("button");
+  closeBtn.className = "bu-modal-close";
+  closeBtn.type = "button";
+  closeBtn.setAttribute("aria-label", "Zamknij");
+  // Safe: static SVG only
+  closeBtn.innerHTML = svgClose;
+  header.appendChild(headerLeft);
+  header.appendChild(closeBtn);
+  modal.appendChild(header);
+  const body = document.createElement("div");
+  body.className = "bu-modal-body";
+  // Safe: buildEntryListHTML używa escapeHTML
+  body.insertAdjacentHTML("afterbegin", buildEntryListHTML(entries, isDefeated ? "Brak defeated ocen – odsłoń oceny ze sprawdzianów!" : "Brak failed ocen – tak trzymaj!"));
+  modal.appendChild(body);
+  overlay.appendChild(modal);
 
   document.body.appendChild(overlay);
 
@@ -542,539 +560,596 @@ const CARD_SEL = "usos-frame, .bu-stats-panel, .bu-slot-panel";
 
 function setupDashboard(): void {
   try {
-  const dashboard = document.querySelector(".local-home-table");
-  if (!dashboard || !dashboard.querySelector("usos-frame")) return;
+    const dashboard = document.querySelector(".local-home-table");
+    if (!dashboard || !dashboard.querySelector("usos-frame")) return;
 
-  // --- Create the statistics panel element first so it participates in ordering ---
-  const stats = loadStatistics();
-  const statsPanel = document.createElement("div");
-  statsPanel.className = "bu-stats-panel";
-  statsPanel.id = "bu-stats-frame";
-  statsPanel.innerHTML = `
-    <div class="bu-stats-header">
-      <span class="bu-stats-title"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -3px; margin-right: 6px;"><path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="m7 11 4-4 4 4 6-6"/></svg>Statystyki ocen</span>
-    </div>
-    <div id="bu-stats-panel-content">
-      ${buildStatsPanelHTML(stats)}
-    </div>
-  `;
+    // --- Create the statistics panel element first so it participates in ordering ---
+    const stats = loadStatistics();
+    const statsPanel = document.createElement("div");
+    statsPanel.className = "bu-stats-panel";
+    statsPanel.id = "bu-stats-frame";
+    // Tworzymy panel statystyk bez innerHTML
+    const statsHeader = document.createElement("div");
+    statsHeader.className = "bu-stats-header";
+    const statsTitle = document.createElement("span");
+    statsTitle.className = "bu-stats-title";
+    // Safe: static SVG only
+    statsTitle.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -3px; margin-right: 6px;"><path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="m7 11 4-4 4 4 6-6"/></svg>Statystyki ocen';
+    statsHeader.appendChild(statsTitle);
+    statsPanel.appendChild(statsHeader);
+    const statsContent = document.createElement("div");
+    statsContent.id = "bu-stats-panel-content";
+    // Safe: buildStatsPanelHTML używa escapeHTML
+    statsContent.insertAdjacentHTML("afterbegin", buildStatsPanelHTML(stats));
+    statsPanel.appendChild(statsContent);
 
-  // --- Create the slot machine panel ---
-  const SLOT_EMOJIS = ["🍒", "🍋", "🍊", "🍇", "⭐", "💎", "7️⃣", "🔔"];
-  const slotPanel = document.createElement("div");
-  slotPanel.className = "bu-slot-panel";
-  slotPanel.id = "bu-slot-frame";
-  slotPanel.innerHTML = `
-    <div class="bu-slot-header">
-      <span class="bu-slot-title"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -3px; margin-right: 6px;"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M12 4v16"/><path d="M2 12h20"/><circle cx="7" cy="8" r="1.5" fill="currentColor" stroke="none"/><circle cx="17" cy="8" r="1.5" fill="currentColor" stroke="none"/><circle cx="7" cy="16" r="1.5" fill="currentColor" stroke="none"/><circle cx="17" cy="16" r="1.5" fill="currentColor" stroke="none"/></svg>Jednoręki bandyta</span>
-      <span class="bu-slot-coins-badge" title="Monety – zdobywasz 1 za każde odsłonięcie oceny, 2 za DEFEATED"><svg class="bu-coin-icon" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10" stroke-width="2"/><path d="M12 6v12" stroke-width="1.8"/><path d="M15 9.5c0-1.1-1.3-2-3-2s-3 .9-3 2c0 1.1 1.3 2 3 2.5s3 1.4 3 2.5c0 1.1-1.3 2-3 2s-3-.9-3-2" stroke-width="1.8"/></svg><span id="bu-slot-coins">${stats.coins}</span></span>
-    </div>
-    <div class="bu-slot-body">
-      <div class="bu-slot-machine">
-        <div class="bu-slot-reels-col">
-          <div class="bu-slot-window">
-            <div class="bu-slot-reel" id="bu-reel-0"><div class="bu-slot-reel-inner"><span>${SLOT_EMOJIS[0]}</span></div></div>
-            <div class="bu-slot-reel" id="bu-reel-1"><div class="bu-slot-reel-inner"><span>${SLOT_EMOJIS[1]}</span></div></div>
-            <div class="bu-slot-reel" id="bu-reel-2"><div class="bu-slot-reel-inner"><span>${SLOT_EMOJIS[2]}</span></div></div>
-          </div>
-          <div class="bu-slot-result" id="bu-slot-result"></div>
-        </div>
-        <div class="bu-slot-lever-wrap">
-          <button class="bu-slot-lever" id="bu-slot-pull" title="Pociągnij!">
-            <div class="bu-lever-arm">
-              <div class="bu-lever-ball"></div>
-            </div>
-          </button>
-        </div>
-      </div>
-    </div>
-  `;
-
-  // --- Fullscreen confetti explosion ---
-  function launchConfetti(): void {
-    const CONFETTI_COUNT = 150;
-    const COLORS = [
-      "#d4a017",
-      "#ff4444",
-      "#44bb44",
-      "#4488ff",
-      "#ff44ff",
-      "#ffaa00",
-      "#00ddff",
-      "#ff6600",
-    ];
-    const SHAPES = ["square", "rect", "circle"];
-    const container = document.createElement("div");
-    container.className = "bu-confetti-container";
-    document.body.appendChild(container);
-
-    interface Particle {
-      el: HTMLDivElement;
-      x: number;
-      y: number;
-      vx: number;
-      vy: number;
-      gravity: number;
-      rotation: number;
-      rotSpeed: number;
-      scale: number;
-      opacity: number;
-      drag: number;
-      wobbleSpeed: number;
-      wobbleAmp: number;
-      phase: number;
+    // --- Create the slot machine panel ---
+    const SLOT_EMOJIS = ["🍒", "🍋", "🍊", "🍇", "⭐", "💎", "7️⃣", "🔔"];
+    const slotPanel = document.createElement("div");
+    slotPanel.className = "bu-slot-panel";
+    slotPanel.id = "bu-slot-frame";
+    // Tworzymy slotPanel bez innerHTML
+    const slotHeader = document.createElement("div");
+    slotHeader.className = "bu-slot-header";
+    const slotTitle = document.createElement("span");
+    slotTitle.className = "bu-slot-title";
+    // Safe: static SVG only
+    slotTitle.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -3px; margin-right: 6px;"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M12 4v16"/><path d="M2 12h20"/><circle cx="7" cy="8" r="1.5" fill="currentColor" stroke="none"/><circle cx="17" cy="8" r="1.5" fill="currentColor" stroke="none"/><circle cx="7" cy="16" r="1.5" fill="currentColor" stroke="none"/><circle cx="17" cy="16" r="1.5" fill="currentColor" stroke="none"/></svg>Jednoręki bandyta';
+    slotHeader.appendChild(slotTitle);
+    const coinsBadge = document.createElement("span");
+    coinsBadge.className = "bu-slot-coins-badge";
+    coinsBadge.title = "Monety – zdobywasz 1 za każde odsłonięcie oceny, 2 za DEFEATED";
+    // Safe: static SVG only
+    coinsBadge.innerHTML = '<svg class="bu-coin-icon" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10" stroke-width="2"/><path d="M12 6v12" stroke-width="1.8"/><path d="M15 9.5c0-1.1-1.3-2-3-2s-3 .9-3 2c0 1.1 1.3 2 3 2.5s3 1.4 3 2.5c0 1.1-1.3 2-3 2s-3-.9-3-2" stroke-width="1.8"/></svg>';
+    const coinsSpan = document.createElement("span");
+    coinsSpan.id = "bu-slot-coins";
+    coinsSpan.textContent = String(stats.coins);
+    coinsBadge.appendChild(coinsSpan);
+    slotHeader.appendChild(coinsBadge);
+    slotPanel.appendChild(slotHeader);
+    const slotBody = document.createElement("div");
+    slotBody.className = "bu-slot-body";
+    const slotMachine = document.createElement("div");
+    slotMachine.className = "bu-slot-machine";
+    const reelsCol = document.createElement("div");
+    reelsCol.className = "bu-slot-reels-col";
+    const slotWindow = document.createElement("div");
+    slotWindow.className = "bu-slot-window";
+    for (let i = 0; i < 3; i++) {
+      const reel = document.createElement("div");
+      reel.className = "bu-slot-reel";
+      reel.id = `bu-reel-${i}`;
+      const reelInner = document.createElement("div");
+      reelInner.className = "bu-slot-reel-inner";
+      const emojiSpan = document.createElement("span");
+      emojiSpan.textContent = SLOT_EMOJIS[i];
+      reelInner.appendChild(emojiSpan);
+      reel.appendChild(reelInner);
+      slotWindow.appendChild(reel);
     }
+    reelsCol.appendChild(slotWindow);
+    const slotResult = document.createElement("div");
+    slotResult.className = "bu-slot-result";
+    slotResult.id = "bu-slot-result";
+    reelsCol.appendChild(slotResult);
+    slotMachine.appendChild(reelsCol);
+    const leverWrap = document.createElement("div");
+    leverWrap.className = "bu-slot-lever-wrap";
+    const leverBtn = document.createElement("button");
+    leverBtn.className = "bu-slot-lever";
+    leverBtn.id = "bu-slot-pull";
+    leverBtn.title = "Pociągnij!";
+    const leverArm = document.createElement("div");
+    leverArm.className = "bu-lever-arm";
+    const leverBall = document.createElement("div");
+    leverBall.className = "bu-lever-ball";
+    leverArm.appendChild(leverBall);
+    leverBtn.appendChild(leverArm);
+    leverWrap.appendChild(leverBtn);
+    slotMachine.appendChild(leverWrap);
+    slotBody.appendChild(slotMachine);
+    slotPanel.appendChild(slotBody);
 
-    const particles: Particle[] = [];
+    // --- Fullscreen confetti explosion ---
+    function launchConfetti(): void {
+      const CONFETTI_COUNT = 150;
+      const COLORS = [
+        "#d4a017",
+        "#ff4444",
+        "#44bb44",
+        "#4488ff",
+        "#ff44ff",
+        "#ffaa00",
+        "#00ddff",
+        "#ff6600",
+      ];
+      const SHAPES = ["square", "rect", "circle"];
+      const container = document.createElement("div");
+      container.className = "bu-confetti-container";
+      document.body.appendChild(container);
 
-    for (let i = 0; i < CONFETTI_COUNT; i++) {
-      const el = document.createElement("div");
-      el.className = "bu-confetti-piece";
-      const color = COLORS[Math.floor(Math.random() * COLORS.length)];
-      const shape = SHAPES[Math.floor(Math.random() * SHAPES.length)];
-      const size = 6 + Math.random() * 8;
-
-      el.style.backgroundColor = color;
-      el.style.width = shape === "rect" ? `${size * 0.5}px` : `${size}px`;
-      el.style.height = shape === "rect" ? `${size * 1.4}px` : `${size}px`;
-      if (shape === "circle") el.style.borderRadius = "50%";
-      else el.style.borderRadius = "2px";
-
-      container.appendChild(el);
-
-      // Launch from random x across screen top area
-      const startX = Math.random() * window.innerWidth;
-      const startY = -20 - Math.random() * 40;
-
-      particles.push({
-        el,
-        x: startX,
-        y: startY,
-        vx: (Math.random() - 0.5) * 8,
-        vy: 2 + Math.random() * 6,
-        gravity: 0.12 + Math.random() * 0.08,
-        rotation: Math.random() * 360,
-        rotSpeed: (Math.random() - 0.5) * 15,
-        scale: 0.8 + Math.random() * 0.6,
-        opacity: 1,
-        drag: 0.98 + Math.random() * 0.015,
-        wobbleSpeed: 2 + Math.random() * 4,
-        wobbleAmp: 1 + Math.random() * 3,
-        phase: Math.random() * Math.PI * 2,
-      });
-    }
-
-    const startTime = performance.now();
-    const DURATION = 5000; // total animation time
-    const FADE_START = 3500; // start fading out
-
-    function tickConfetti(now: number) {
-      const elapsed = now - startTime;
-      if (elapsed > DURATION) {
-        container.remove();
-        return;
+      interface Particle {
+        el: HTMLDivElement;
+        x: number;
+        y: number;
+        vx: number;
+        vy: number;
+        gravity: number;
+        rotation: number;
+        rotSpeed: number;
+        scale: number;
+        opacity: number;
+        drag: number;
+        wobbleSpeed: number;
+        wobbleAmp: number;
+        phase: number;
       }
 
-      const fadeProgress =
-        elapsed > FADE_START
-          ? (elapsed - FADE_START) / (DURATION - FADE_START)
-          : 0;
+      const particles: Particle[] = [];
 
-      for (const p of particles) {
-        p.vy += p.gravity;
-        p.vx *= p.drag;
-        p.vy *= p.drag;
-        p.x +=
-          p.vx +
-          Math.sin(elapsed * 0.001 * p.wobbleSpeed + p.phase) * p.wobbleAmp;
-        p.y += p.vy;
-        p.rotation += p.rotSpeed;
-        p.opacity = 1 - fadeProgress;
+      for (let i = 0; i < CONFETTI_COUNT; i++) {
+        const el = document.createElement("div");
+        el.className = "bu-confetti-piece";
+        const color = COLORS[Math.floor(Math.random() * COLORS.length)];
+        const shape = SHAPES[Math.floor(Math.random() * SHAPES.length)];
+        const size = 6 + Math.random() * 8;
 
-        p.el.style.transform = `translate(${p.x}px, ${p.y}px) rotate(${p.rotation}deg) scale(${p.scale})`;
-        p.el.style.opacity = String(p.opacity);
+        el.style.backgroundColor = color;
+        el.style.width = shape === "rect" ? `${size * 0.5}px` : `${size}px`;
+        el.style.height = shape === "rect" ? `${size * 1.4}px` : `${size}px`;
+        if (shape === "circle") el.style.borderRadius = "50%";
+        else el.style.borderRadius = "2px";
+
+        container.appendChild(el);
+
+        // Launch from random x across screen top area
+        const startX = Math.random() * window.innerWidth;
+        const startY = -20 - Math.random() * 40;
+
+        particles.push({
+          el,
+          x: startX,
+          y: startY,
+          vx: (Math.random() - 0.5) * 8,
+          vy: 2 + Math.random() * 6,
+          gravity: 0.12 + Math.random() * 0.08,
+          rotation: Math.random() * 360,
+          rotSpeed: (Math.random() - 0.5) * 15,
+          scale: 0.8 + Math.random() * 0.6,
+          opacity: 1,
+          drag: 0.98 + Math.random() * 0.015,
+          wobbleSpeed: 2 + Math.random() * 4,
+          wobbleAmp: 1 + Math.random() * 3,
+          phase: Math.random() * Math.PI * 2,
+        });
+      }
+
+      const startTime = performance.now();
+      const DURATION = 5000; // total animation time
+      const FADE_START = 3500; // start fading out
+
+      function tickConfetti(now: number) {
+        const elapsed = now - startTime;
+        if (elapsed > DURATION) {
+          container.remove();
+          return;
+        }
+
+        const fadeProgress =
+          elapsed > FADE_START
+            ? (elapsed - FADE_START) / (DURATION - FADE_START)
+            : 0;
+
+        for (const p of particles) {
+          p.vy += p.gravity;
+          p.vx *= p.drag;
+          p.vy *= p.drag;
+          p.x +=
+            p.vx +
+            Math.sin(elapsed * 0.001 * p.wobbleSpeed + p.phase) * p.wobbleAmp;
+          p.y += p.vy;
+          p.rotation += p.rotSpeed;
+          p.opacity = 1 - fadeProgress;
+
+          p.el.style.transform = `translate(${p.x}px, ${p.y}px) rotate(${p.rotation}deg) scale(${p.scale})`;
+          p.el.style.opacity = String(p.opacity);
+        }
+
+        requestAnimationFrame(tickConfetti);
       }
 
       requestAnimationFrame(tickConfetti);
     }
 
-    requestAnimationFrame(tickConfetti);
-  }
+    // Slot machine logic
+    function initSlotMachine(): void {
+      const lever = slotPanel.querySelector(
+        "#bu-slot-pull",
+      ) as HTMLElement | null;
+      const reelEls = [0, 1, 2].map(
+        (i) =>
+          slotPanel.querySelector(
+            `#bu-reel-${i} .bu-slot-reel-inner`,
+          ) as HTMLElement | null,
+      );
+      const resultEl = slotPanel.querySelector(
+        "#bu-slot-result",
+      ) as HTMLElement | null;
+      if (!lever || reelEls.some((r) => !r) || !resultEl) return;
+      // All elements verified — safe to use
+      const reels = reelEls as HTMLElement[];
+      let spinning = false;
+      const CELL = 64;
+      const N = SLOT_EMOJIS.length; // number of symbols
 
-  // Slot machine logic
-  function initSlotMachine(): void {
-    const lever = slotPanel.querySelector("#bu-slot-pull") as HTMLElement | null;
-    const reelEls = [0, 1, 2].map(
-      (i) =>
-        slotPanel.querySelector(
-          `#bu-reel-${i} .bu-slot-reel-inner`,
-        ) as HTMLElement | null,
-    );
-    const resultEl = slotPanel.querySelector("#bu-slot-result") as HTMLElement | null;
-    if (!lever || reelEls.some((r) => !r) || !resultEl) return;
-    // All elements verified — safe to use
-    const reels = reelEls as HTMLElement[];
-    let spinning = false;
-    const CELL = 64;
-    const N = SLOT_EMOJIS.length; // number of symbols
-
-    // Build the reel strip: 3 full sets of emojis so we can wrap around smoothly
-    function buildReelStrip(): string {
-      let html = "";
-      for (let s = 0; s < 3; s++) {
-        for (const emoji of SLOT_EMOJIS) {
-          html += `<span>${emoji}</span>`;
-        }
-      }
-      return html;
-    }
-
-    // Initialize reels with the strip
-    reels.forEach((reel) => {
-      reel.innerHTML = buildReelStrip();
-      reel.style.transform = "translateY(0)";
-    });
-
-    // Ease-out timing function: fast start → slow stop
-    function easeOut(t: number): number {
-      return 1 - Math.pow(1 - t, 3);
-    }
-
-    /**
-     * Animate one drum. `targetIdx` = index in SLOT_EMOJIS to land on.
-     * `totalTurns` = how many full rotations (in emoji-counts) to spin.
-     * Returns a promise that resolves when the reel stops.
-     */
-    function spinReel(
-      reel: HTMLElement,
-      targetIdx: number,
-      totalTurns: number,
-      duration: number,
-    ): Promise<void> {
-      return new Promise((resolve) => {
-        // Total distance in emoji units: full rotations + offset to land on target
-        const totalDistance = totalTurns * N + targetIdx;
-        const totalPx = totalDistance * CELL;
-        const startTime = performance.now();
-
-        function tick(now: number) {
-          const elapsed = now - startTime;
-          const progress = Math.min(elapsed / duration, 1);
-          const easedProgress = easeOut(progress);
-
-          // Current position in px
-          const currentPx = totalPx * easedProgress;
-          // Wrap around: since we have 3×N items (3 sets), wrap within that range
-          const wrapPx = currentPx % (N * 3 * CELL);
-          reel.style.transform = `translateY(-${wrapPx}px)`;
-
-          if (progress < 1) {
-            requestAnimationFrame(tick);
-          } else {
-            // Snap to exact target position
-            const finalPx = targetIdx * CELL;
-            reel.style.transform = `translateY(-${finalPx}px)`;
-            resolve();
+      // Build the reel strip: 3 full sets of emojis so we can wrap around smoothly
+      function buildReelStrip(): string {
+        let html = "";
+        for (let s = 0; s < 3; s++) {
+          for (const emoji of SLOT_EMOJIS) {
+            html += `<span>${emoji}</span>`;
           }
         }
+        return html;
+      }
 
-        requestAnimationFrame(tick);
+      // Initialize reels with the strip (safe: only emojis)
+      reels.forEach((reel) => {
+        while (reel.firstChild) reel.removeChild(reel.firstChild);
+        for (let s = 0; s < 3; s++) {
+          for (const emoji of SLOT_EMOJIS) {
+            const span = document.createElement("span");
+            span.textContent = emoji;
+            reel.appendChild(span);
+          }
+        }
+        reel.style.transform = "translateY(0)";
+      });
+
+      // Ease-out timing function: fast start → slow stop
+      function easeOut(t: number): number {
+        return 1 - Math.pow(1 - t, 3);
+      }
+
+      /**
+       * Animate one drum. `targetIdx` = index in SLOT_EMOJIS to land on.
+       * `totalTurns` = how many full rotations (in emoji-counts) to spin.
+       * Returns a promise that resolves when the reel stops.
+       */
+      function spinReel(
+        reel: HTMLElement,
+        targetIdx: number,
+        totalTurns: number,
+        duration: number,
+      ): Promise<void> {
+        return new Promise((resolve) => {
+          // Total distance in emoji units: full rotations + offset to land on target
+          const totalDistance = totalTurns * N + targetIdx;
+          const totalPx = totalDistance * CELL;
+          const startTime = performance.now();
+
+          function tick(now: number) {
+            const elapsed = now - startTime;
+            const progress = Math.min(elapsed / duration, 1);
+            const easedProgress = easeOut(progress);
+
+            // Current position in px
+            const currentPx = totalPx * easedProgress;
+            // Wrap around: since we have 3×N items (3 sets), wrap within that range
+            const wrapPx = currentPx % (N * 3 * CELL);
+            reel.style.transform = `translateY(-${wrapPx}px)`;
+
+            if (progress < 1) {
+              requestAnimationFrame(tick);
+            } else {
+              // Snap to exact target position
+              const finalPx = targetIdx * CELL;
+              reel.style.transform = `translateY(-${finalPx}px)`;
+              resolve();
+            }
+          }
+
+          requestAnimationFrame(tick);
+        });
+      }
+
+      // Initial lever state based on coins
+      refreshCoinDisplay();
+
+      lever.addEventListener("click", () => {
+        if (spinning) return;
+        const currentStats = loadStatistics();
+        const freeSpinAvailable = hasFreeSpinToday();
+        if (currentStats.coins <= 0 && !freeSpinAvailable) {
+          resultEl.textContent = "Brak monet!";
+          resultEl.className = "bu-slot-result bu-slot-no-coins";
+          return;
+        }
+        // Use free spin if available, otherwise spend a coin
+        if (freeSpinAvailable) {
+          useFreeSpinToday();
+          refreshCoinDisplay();
+        } else {
+          updateStatistic("coins", -1);
+        }
+        spinning = true;
+        lever.classList.add("bu-lever-pulled");
+        resultEl.textContent = "";
+        resultEl.className = "bu-slot-result";
+
+        // Pick random target for each reel
+        const targetIndices = [0, 1, 2].map(() =>
+          Math.floor(Math.random() * N),
+        );
+        const results = targetIndices.map((i) => SLOT_EMOJIS[i]);
+
+        // Lever animation reset
+        setTimeout(() => lever.classList.remove("bu-lever-pulled"), 400);
+
+        // Spin reels with increasing duration + number of turns (staggered stop)
+        const promises = reels.map((reel, i) => {
+          const turns = 3 + i * 2; // 3, 5, 7 full rotations
+          const duration = 1500 + i * 800; // 1.5s, 2.3s, 3.1s
+          return spinReel(reel, targetIndices[i], turns, duration);
+        });
+
+        Promise.all(promises).then(() => {
+          spinning = false;
+          if (results[0] === results[1] && results[1] === results[2]) {
+            resultEl.textContent = "🎉 JACKPOT! +10 monet!";
+            resultEl.classList.add("bu-slot-jackpot");
+            updateStatistic("coins", 10);
+            launchConfetti();
+          } else if (
+            results[0] === results[1] ||
+            results[1] === results[2] ||
+            results[0] === results[2]
+          ) {
+            resultEl.textContent = "😏 Prawie...";
+            resultEl.classList.add("bu-slot-almost");
+          } else {
+            const msgs = [
+              "Spróbuj ponownie!",
+              "Następnym razem...",
+              "Kręć dalej!",
+              "Jeszcze raz?",
+              "Nie poddawaj się!",
+            ];
+            resultEl.textContent =
+              msgs[Math.floor(Math.random() * msgs.length)];
+          }
+        });
       });
     }
 
-    // Initial lever state based on coins
-    refreshCoinDisplay();
+    const usosFrames = Array.from(
+      dashboard.querySelectorAll("usos-frame"),
+    ) as HTMLElement[];
 
-    lever.addEventListener("click", () => {
-      if (spinning) return;
-      const currentStats = loadStatistics();
-      const freeSpinAvailable = hasFreeSpinToday();
-      if (currentStats.coins <= 0 && !freeSpinAvailable) {
-        resultEl.textContent = "Brak monet!";
-        resultEl.className = "bu-slot-result bu-slot-no-coins";
-        return;
-      }
-      // Use free spin if available, otherwise spend a coin
-      if (freeSpinAvailable) {
-        useFreeSpinToday();
-        refreshCoinDisplay();
-      } else {
-        updateStatistic("coins", -1);
-      }
-      spinning = true;
-      lever.classList.add("bu-lever-pulled");
-      resultEl.textContent = "";
-      resultEl.className = "bu-slot-result";
+    // Combine native frames + stats panel + slot machine into one list
+    const frames: HTMLElement[] = [statsPanel, slotPanel, ...usosFrames];
+    const state = loadDashboardState();
 
-      // Pick random target for each reel
-      const targetIndices = [0, 1, 2].map(() => Math.floor(Math.random() * N));
-      const results = targetIndices.map((i) => SLOT_EMOJIS[i]);
+    // Assign ids and collect default order
+    const idToFrame = new Map<string, HTMLElement>();
+    const defaultOrder: string[] = [];
+    for (const frame of frames) {
+      const id = getFrameId(frame);
+      if (!frame.id) frame.id = id;
+      idToFrame.set(id, frame);
+      defaultOrder.push(id);
+    }
 
-      // Lever animation reset
-      setTimeout(() => lever.classList.remove("bu-lever-pulled"), 400);
+    const order =
+      state?.order?.filter((id) => idToFrame.has(id)) ?? defaultOrder;
+    // Add any new ids not yet in saved order (e.g. stats panel added for the first time)
+    for (const id of defaultOrder) {
+      if (!order.includes(id)) order.unshift(id);
+    }
+    const hiddenSet = new Set(state?.hidden ?? []);
+    const spans = state?.spans ?? {};
 
-      // Spin reels with increasing duration + number of turns (staggered stop)
-      const promises = reels.map((reel, i) => {
-        const turns = 3 + i * 2; // 3, 5, 7 full rotations
-        const duration = 1500 + i * 800; // 1.5s, 2.3s, 3.1s
-        return spinReel(reel, targetIndices[i], turns, duration);
-      });
+    function getSpan(id: string): SpanValue {
+      const s = spans[id];
+      if (s && SPAN_OPTIONS.includes(s)) return s;
+      // Default: stats panel = full width, others = half
+      return id === "bu-stats-frame" ? 6 : 3;
+    }
 
-      Promise.all(promises).then(() => {
-        spinning = false;
-        if (results[0] === results[1] && results[1] === results[2]) {
-          resultEl.textContent = "🎉 JACKPOT! +10 monet!";
-          resultEl.classList.add("bu-slot-jackpot");
-          updateStatistic("coins", 10);
-          launchConfetti();
-        } else if (
-          results[0] === results[1] ||
-          results[1] === results[2] ||
-          results[0] === results[2]
-        ) {
-          resultEl.textContent = "😏 Prawie...";
-          resultEl.classList.add("bu-slot-almost");
-        } else {
-          const msgs = [
-            "Spróbuj ponownie!",
-            "Następnym razem...",
-            "Kręć dalej!",
-            "Jeszcze raz?",
-            "Nie poddawaj się!",
-          ];
-          resultEl.textContent = msgs[Math.floor(Math.random() * msgs.length)];
-        }
-      });
-    });
-  }
+    function applySpan(frame: HTMLElement, span: SpanValue): void {
+      frame.style.gridColumn = `span ${span}`;
+      frame.dataset.buSpan = String(span);
+    }
 
-  const usosFrames = Array.from(
-    dashboard.querySelectorAll("usos-frame"),
-  ) as HTMLElement[];
+    // Build grid: visible panels first, then divider, then hidden panels at bottom
+    const visibleOrder = order.filter((id) => !hiddenSet.has(id));
+    const hiddenOrder = order.filter((id) => hiddenSet.has(id));
 
-  // Combine native frames + stats panel + slot machine into one list
-  const frames: HTMLElement[] = [statsPanel, slotPanel, ...usosFrames];
-  const state = loadDashboardState();
-
-  // Assign ids and collect default order
-  const idToFrame = new Map<string, HTMLElement>();
-  const defaultOrder: string[] = [];
-  for (const frame of frames) {
-    const id = getFrameId(frame);
-    if (!frame.id) frame.id = id;
-    idToFrame.set(id, frame);
-    defaultOrder.push(id);
-  }
-
-  const order = state?.order?.filter((id) => idToFrame.has(id)) ?? defaultOrder;
-  // Add any new ids not yet in saved order (e.g. stats panel added for the first time)
-  for (const id of defaultOrder) {
-    if (!order.includes(id)) order.unshift(id);
-  }
-  const hiddenSet = new Set(state?.hidden ?? []);
-  const spans = state?.spans ?? {};
-
-  function getSpan(id: string): SpanValue {
-    const s = spans[id];
-    if (s && SPAN_OPTIONS.includes(s)) return s;
-    // Default: stats panel = full width, others = half
-    return id === "bu-stats-frame" ? 6 : 3;
-  }
-
-  function applySpan(frame: HTMLElement, span: SpanValue): void {
-    frame.style.gridColumn = `span ${span}`;
-    frame.dataset.buSpan = String(span);
-  }
-
-  // Build grid: visible panels first, then divider, then hidden panels at bottom
-  const visibleOrder = order.filter((id) => !hiddenSet.has(id));
-  const hiddenOrder = order.filter((id) => hiddenSet.has(id));
-
-  const wrapper = document.createElement("div");
-  wrapper.className = "bottom-dashboard bu-dashboard-grid";
-  for (const id of visibleOrder) {
-    const frame = idToFrame.get(id);
-    if (!frame) continue;
-    applySpan(frame, getSpan(id));
-    wrapper.appendChild(frame);
-  }
-  const divider = document.createElement("div");
-  divider.className = "bu-hidden-divider";
-  divider.setAttribute("aria-hidden", "true");
-  if (hiddenOrder.length > 0) {
-    wrapper.appendChild(divider);
-    for (const id of hiddenOrder) {
+    const wrapper = document.createElement("div");
+    wrapper.className = "bottom-dashboard bu-dashboard-grid";
+    for (const id of visibleOrder) {
       const frame = idToFrame.get(id);
       if (!frame) continue;
-      frame.classList.add("bu-hidden-card");
       applySpan(frame, getSpan(id));
       wrapper.appendChild(frame);
     }
-  }
-  dashboard.innerHTML = "";
-  dashboard.appendChild(wrapper);
-
-  // Hide button + width control (shown only in edit mode)
-  for (const frame of frames) {
-    const id = getFrameId(frame);
-    const hideBtn = document.createElement("button");
-    hideBtn.type = "button";
-    hideBtn.className = "bu-hide-btn";
-    hideBtn.setAttribute("aria-label", "Ukryj ten blok");
-    hideBtn.innerHTML = hiddenSet.has(id) ? icons.eyeOff : icons.eye;
-    hideBtn.addEventListener("click", (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      const willBeHidden = !frame.classList.contains("bu-hidden-card");
-      if (willBeHidden) {
+    const divider = document.createElement("div");
+    divider.className = "bu-hidden-divider";
+    divider.setAttribute("aria-hidden", "true");
+    if (hiddenOrder.length > 0) {
+      wrapper.appendChild(divider);
+      for (const id of hiddenOrder) {
+        const frame = idToFrame.get(id);
+        if (!frame) continue;
         frame.classList.add("bu-hidden-card");
-        hideBtn.innerHTML = icons.eyeOff;
-        if (!wrapper.contains(divider)) wrapper.appendChild(divider);
+        applySpan(frame, getSpan(id));
         wrapper.appendChild(frame);
-      } else {
-        frame.classList.remove("bu-hidden-card");
-        hideBtn.innerHTML = icons.eye;
-        wrapper.insertBefore(frame, divider);
-        if (
-          wrapper.querySelectorAll(`:is(${CARD_SEL}).bu-hidden-card`).length ===
-            0 &&
-          divider.parentElement
-        )
-          divider.remove();
       }
-      persistOrder();
-    });
+    }
+    dashboard.innerHTML = "";
+    dashboard.appendChild(wrapper);
 
-    const widthWrap = document.createElement("div");
-    widthWrap.className = "bu-width-control";
-    SPAN_OPTIONS.forEach((span) => {
-      const btn = document.createElement("button");
-      btn.type = "button";
-      btn.className = "bu-span-btn";
-      btn.textContent =
-        span === 2 ? "⅓" : span === 3 ? "½" : span === 4 ? "⅔" : "1";
-      btn.title =
-        span === 2
-          ? "1/3 szerokości"
-          : span === 3
-            ? "1/2 szerokości (dwa w rzędzie)"
-            : span === 4
-              ? "2/3 szerokości"
-              : "Pełna szerokość";
-      btn.dataset.span = String(span);
-      if (getSpan(id) === span) btn.classList.add("bu-span-active");
-      btn.addEventListener("click", (e) => {
+    // Hide button + width control (shown only in edit mode)
+    for (const frame of frames) {
+      const id = getFrameId(frame);
+      const hideBtn = document.createElement("button");
+      hideBtn.type = "button";
+      hideBtn.className = "bu-hide-btn";
+      hideBtn.setAttribute("aria-label", "Ukryj ten blok");
+      hideBtn.innerHTML = hiddenSet.has(id) ? icons.eyeOff : icons.eye;
+      hideBtn.addEventListener("click", (e) => {
         e.preventDefault();
         e.stopPropagation();
-        applySpan(frame, span);
-        widthWrap
-          .querySelectorAll(".bu-span-btn")
-          .forEach((b) => b.classList.remove("bu-span-active"));
-        btn.classList.add("bu-span-active");
+        const willBeHidden = !frame.classList.contains("bu-hidden-card");
+        if (willBeHidden) {
+          frame.classList.add("bu-hidden-card");
+          hideBtn.innerHTML = icons.eyeOff;
+          if (!wrapper.contains(divider)) wrapper.appendChild(divider);
+          wrapper.appendChild(frame);
+        } else {
+          frame.classList.remove("bu-hidden-card");
+          hideBtn.innerHTML = icons.eye;
+          wrapper.insertBefore(frame, divider);
+          if (
+            wrapper.querySelectorAll(`:is(${CARD_SEL}).bu-hidden-card`)
+              .length === 0 &&
+            divider.parentElement
+          )
+            divider.remove();
+        }
         persistOrder();
       });
-      widthWrap.appendChild(btn);
-    });
 
-    // For usos-frame: insert into the title slot; for custom panels: into the header
-    const titleEl = frame.classList.contains("bu-stats-panel")
-      ? frame.querySelector(".bu-stats-title")
-      : frame.classList.contains("bu-slot-panel")
-        ? frame.querySelector(".bu-slot-title")
-        : frame.querySelector('[slot="title"], h2[slot="title"]');
-    if (titleEl) {
-      (titleEl as HTMLElement).style.display = "flex";
-      (titleEl as HTMLElement).style.alignItems = "center";
-      titleEl.appendChild(widthWrap);
-      titleEl.appendChild(hideBtn);
+      const widthWrap = document.createElement("div");
+      widthWrap.className = "bu-width-control";
+      SPAN_OPTIONS.forEach((span) => {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "bu-span-btn";
+        btn.textContent =
+          span === 2 ? "⅓" : span === 3 ? "½" : span === 4 ? "⅔" : "1";
+        btn.title =
+          span === 2
+            ? "1/3 szerokości"
+            : span === 3
+              ? "1/2 szerokości (dwa w rzędzie)"
+              : span === 4
+                ? "2/3 szerokości"
+                : "Pełna szerokość";
+        btn.dataset.span = String(span);
+        if (getSpan(id) === span) btn.classList.add("bu-span-active");
+        btn.addEventListener("click", (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          applySpan(frame, span);
+          widthWrap
+            .querySelectorAll(".bu-span-btn")
+            .forEach((b) => b.classList.remove("bu-span-active"));
+          btn.classList.add("bu-span-active");
+          persistOrder();
+        });
+        widthWrap.appendChild(btn);
+      });
+
+      // For usos-frame: insert into the title slot; for custom panels: into the header
+      const titleEl = frame.classList.contains("bu-stats-panel")
+        ? frame.querySelector(".bu-stats-title")
+        : frame.classList.contains("bu-slot-panel")
+          ? frame.querySelector(".bu-slot-title")
+          : frame.querySelector('[slot="title"], h2[slot="title"]');
+      if (titleEl) {
+        (titleEl as HTMLElement).style.display = "flex";
+        (titleEl as HTMLElement).style.alignItems = "center";
+        titleEl.appendChild(widthWrap);
+        titleEl.appendChild(hideBtn);
+      }
     }
-  }
 
-  function getCurrentOrder(): string[] {
-    return Array.from(wrapper.querySelectorAll(CARD_SEL)).map((f) =>
-      getFrameId(f),
-    );
-  }
-
-  function getHiddenIds(): string[] {
-    return Array.from(
-      wrapper.querySelectorAll(`:is(${CARD_SEL}).bu-hidden-card`),
-    ).map((f) => getFrameId(f));
-  }
-
-  function getSpans(): Record<string, SpanValue> {
-    const out: Record<string, SpanValue> = {};
-    wrapper.querySelectorAll(CARD_SEL).forEach((f) => {
-      const id = getFrameId(f);
-      const span = (f as HTMLElement).dataset.buSpan;
-      const n = span ? parseInt(span, 10) : 3;
-      if (SPAN_OPTIONS.includes(n as SpanValue)) out[id] = n as SpanValue;
-    });
-    return out;
-  }
-
-  function persistOrder(): void {
-    saveDashboardState({
-      order: getCurrentOrder(),
-      hidden: getHiddenIds(),
-      spans: getSpans(),
-    });
-  }
-
-  // Drag and drop
-  let dragged: HTMLElement | null = null;
-  function onDragStart(e: DragEvent): void {
-    if (!dashboard.classList.contains("bu-edit-mode")) return;
-    const card = (e.currentTarget as HTMLElement).closest(
-      CARD_SEL,
-    ) as HTMLElement;
-    dragged = card;
-    if (dragged) {
-      dragged.classList.add("bu-dragging");
-      e.dataTransfer?.setData("text/plain", getFrameId(dragged));
-      e.dataTransfer!.effectAllowed = "move";
+    function getCurrentOrder(): string[] {
+      return Array.from(wrapper.querySelectorAll(CARD_SEL)).map((f) =>
+        getFrameId(f),
+      );
     }
-  }
-  function onDragEnd(): void {
-    dragged?.classList.remove("bu-dragging");
-    dragged = null;
-  }
-  function onDragOver(e: DragEvent): void {
-    e.preventDefault();
-    e.dataTransfer!.dropEffect = "move";
-    const target = (e.target as HTMLElement).closest(CARD_SEL) as HTMLElement;
-    if (!target || !dragged || target === dragged) return;
-    const draggedHidden = dragged.classList.contains("bu-hidden-card");
-    const targetHidden = target.classList.contains("bu-hidden-card");
-    if (draggedHidden !== targetHidden) return;
-    const rect = target.getBoundingClientRect();
-    const mid = rect.top + rect.height / 2;
-    if (e.clientY < mid) wrapper.insertBefore(dragged, target);
-    else wrapper.insertBefore(dragged, target.nextSibling);
-  }
-  function onDrop(e: DragEvent): void {
-    e.preventDefault();
-    persistOrder();
-  }
 
-  for (const frame of frames) {
-    frame.setAttribute("draggable", "true");
-    frame.addEventListener("dragstart", onDragStart);
-    frame.addEventListener("dragend", onDragEnd);
-    frame.addEventListener("dragover", onDragOver);
-    frame.addEventListener("drop", onDrop);
-  }
+    function getHiddenIds(): string[] {
+      return Array.from(
+        wrapper.querySelectorAll(`:is(${CARD_SEL}).bu-hidden-card`),
+      ).map((f) => getFrameId(f));
+    }
 
-  dashboardEditState = { dashboard, persistOrder };
+    function getSpans(): Record<string, SpanValue> {
+      const out: Record<string, SpanValue> = {};
+      wrapper.querySelectorAll(CARD_SEL).forEach((f) => {
+        const id = getFrameId(f);
+        const span = (f as HTMLElement).dataset.buSpan;
+        const n = span ? parseInt(span, 10) : 3;
+        if (SPAN_OPTIONS.includes(n as SpanValue)) out[id] = n as SpanValue;
+      });
+      return out;
+    }
 
-  // Attach click handlers for stat cards
-  attachStatCardListeners(statsPanel);
+    function persistOrder(): void {
+      saveDashboardState({
+        order: getCurrentOrder(),
+        hidden: getHiddenIds(),
+        spans: getSpans(),
+      });
+    }
 
-  // Initialize slot machine
-  initSlotMachine();
+    // Drag and drop
+    let dragged: HTMLElement | null = null;
+    function onDragStart(e: DragEvent): void {
+      if (!dashboard.classList.contains("bu-edit-mode")) return;
+      const card = (e.currentTarget as HTMLElement).closest(
+        CARD_SEL,
+      ) as HTMLElement;
+      dragged = card;
+      if (dragged) {
+        dragged.classList.add("bu-dragging");
+        e.dataTransfer?.setData("text/plain", getFrameId(dragged));
+        e.dataTransfer!.effectAllowed = "move";
+      }
+    }
+    function onDragEnd(): void {
+      dragged?.classList.remove("bu-dragging");
+      dragged = null;
+    }
+    function onDragOver(e: DragEvent): void {
+      e.preventDefault();
+      e.dataTransfer!.dropEffect = "move";
+      const target = (e.target as HTMLElement).closest(CARD_SEL) as HTMLElement;
+      if (!target || !dragged || target === dragged) return;
+      const draggedHidden = dragged.classList.contains("bu-hidden-card");
+      const targetHidden = target.classList.contains("bu-hidden-card");
+      if (draggedHidden !== targetHidden) return;
+      const rect = target.getBoundingClientRect();
+      const mid = rect.top + rect.height / 2;
+      if (e.clientY < mid) wrapper.insertBefore(dragged, target);
+      else wrapper.insertBefore(dragged, target.nextSibling);
+    }
+    function onDrop(e: DragEvent): void {
+      e.preventDefault();
+      persistOrder();
+    }
 
-  // Inject icons into usos-frame title headers
-  injectFrameIcons(usosFrames);
+    for (const frame of frames) {
+      frame.setAttribute("draggable", "true");
+      frame.addEventListener("dragstart", onDragStart);
+      frame.addEventListener("dragend", onDragEnd);
+      frame.addEventListener("dragover", onDragOver);
+      frame.addEventListener("drop", onDrop);
+    }
+
+    dashboardEditState = { dashboard, persistOrder };
+
+    // Attach click handlers for stat cards
+    attachStatCardListeners(statsPanel);
+
+    // Initialize slot machine
+    initSlotMachine();
+
+    // Inject icons into usos-frame title headers
+    injectFrameIcons(usosFrames);
   } catch (err) {
     console.warn("[Better USOS] setupDashboard error:", err);
   }
@@ -1599,6 +1674,7 @@ function injectFrameIcons(frames: HTMLElement[]): void {
 
     const iconSpan = document.createElement("span");
     iconSpan.className = "bu-frame-icon";
+    // Safe: static SVG only
     iconSpan.innerHTML = svg;
     header.insertBefore(iconSpan, header.firstChild);
   }
@@ -1606,23 +1682,23 @@ function injectFrameIcons(frames: HTMLElement[]): void {
 
 async function run(): Promise<void> {
   try {
-  // Load extension-only storage caches before anything that needs them
-  await Promise.all([initStatsCache(), initDashboardCache()]);
+    // Load extension-only storage caches before anything that needs them
+    await Promise.all([initStatsCache(), initDashboardCache()]);
 
-  injectShadowStyle(
-    ["main-panel"],
-    `
+    injectShadowStyle(
+      ["main-panel"],
+      `
     #page-body {
       display: flex !important;
       justify-content: center !important;
       min-height: calc(100vh - 3.5rem) !important;
     }
 `,
-  );
+    );
 
-  injectShadowStyle(
-    ["usos-frame"],
-    `
+    injectShadowStyle(
+      ["usos-frame"],
+      `
     #header {
       background: transparent !important;
       color: var(--usos-text, #1e293b) !important;
@@ -1645,11 +1721,11 @@ async function run(): Promise<void> {
       fill: none !important;
     }
   `,
-  );
+    );
 
-  injectShadowStyle(
-    ["usos-frame", "usos-link"],
-    `
+    injectShadowStyle(
+      ["usos-frame", "usos-link"],
+      `
      a {
       text-transform: lowercase;
       display: inline-block;
@@ -1658,11 +1734,11 @@ async function run(): Promise<void> {
       text-transform: uppercase !important;
     }
   `,
-  );
+    );
 
-  injectShadowStyle(
-    ["usos-selector", "text-field"],
-    `
+    injectShadowStyle(
+      ["usos-selector", "text-field"],
+      `
     #input-cont input,
     #input-cont {
       border-radius: 10px !important;
@@ -1686,12 +1762,12 @@ async function run(): Promise<void> {
       color: var(--font-color, #1e293b) !important;
     }
   `,
-  );
+    );
 
-  // Style select-field shadow DOM
-  injectShadowStyle(
-    ["select-field"],
-    `
+    // Style select-field shadow DOM
+    injectShadowStyle(
+      ["select-field"],
+      `
     select {
       background: var(--background, #fff) !important;
       color: var(--font-color, #1e293b) !important;
@@ -1700,12 +1776,12 @@ async function run(): Promise<void> {
       padding: 6px 10px !important;
     }
   `,
-  );
+    );
 
-  // Style usos-frame shadow internals for dark mode
-  injectShadowStyle(
-    ["usos-frame"],
-    `
+    // Style usos-frame shadow internals for dark mode
+    injectShadowStyle(
+      ["usos-frame"],
+      `
     :host {
       background: var(--background, #fff) !important;
       color: var(--font-color, #1e293b) !important;
@@ -1714,12 +1790,12 @@ async function run(): Promise<void> {
       color: var(--font-color, #1e293b) !important;
     }
   `,
-  );
+    );
 
-  // Style usos-tooltip and usos-dialog shadow DOM for dark mode
-  injectShadowStyle(
-    ["usos-tooltip"],
-    `
+    // Style usos-tooltip and usos-dialog shadow DOM for dark mode
+    injectShadowStyle(
+      ["usos-tooltip"],
+      `
     :host {
       background: var(--background, #fff) !important;
       color: var(--font-color, #1e293b) !important;
@@ -1730,12 +1806,12 @@ async function run(): Promise<void> {
       color: var(--font-color, #1e293b) !important;
     }
   `,
-  );
+    );
 
-  // Style tab-layout shadow DOM
-  injectShadowStyle(
-    ["tab-layout"],
-    `
+    // Style tab-layout shadow DOM
+    injectShadowStyle(
+      ["tab-layout"],
+      `
     :host {
       color: var(--font-color, #1e293b) !important;
     }
@@ -1747,12 +1823,12 @@ async function run(): Promise<void> {
       color: var(--primary, #4F4C6A) !important;
     }
   `,
-  );
+    );
 
-  // Timetable – style shadow DOM (works in both light & dark via CSS vars on <html>)
-  injectShadowStyle(
-    ["usos-timetable"],
-    `
+    // Timetable – style shadow DOM (works in both light & dark via CSS vars on <html>)
+    injectShadowStyle(
+      ["usos-timetable"],
+      `
     :host {
       color: var(--font-color, #06022E) !important;
     }
@@ -1790,22 +1866,22 @@ async function run(): Promise<void> {
       color: var(--font-color, #06022E) !important;
     }
   `,
-  );
+    );
 
-  // timetable-day – transparent bg in dark, original in light
-  injectShadowStyle(
-    ["timetable-day"],
-    `
+    // timetable-day – transparent bg in dark, original in light
+    injectShadowStyle(
+      ["timetable-day"],
+      `
     :host {
       background: var(--bu-tt-day-bg, #fafafa) !important;
       border-color: var(--border, #DADADE) !important;
     }
   `,
-  );
+    );
 
-  injectShadowStyle(
-    ["timetable-entry"],
-    `
+    injectShadowStyle(
+      ["timetable-entry"],
+      `
     :host {
       color: var(--font-color, #06022E) !important;
     }
@@ -1825,12 +1901,12 @@ async function run(): Promise<void> {
       --on-primary: var(--font-color, #06022E) !important;
     }
   `,
-  );
+    );
 
-  // Timetable entry → usos-dialog popup styling
-  injectShadowStyle(
-    ["timetable-entry", "usos-dialog"],
-    `
+    // Timetable entry → usos-dialog popup styling
+    injectShadowStyle(
+      ["timetable-entry", "usos-dialog"],
+      `
     dialog {
       background: var(--background, #fff) !important;
       color: var(--font-color, #06022E) !important;
@@ -1859,12 +1935,12 @@ async function run(): Promise<void> {
       color: var(--primary, #818cf8) !important;
     }
   `,
-  );
+    );
 
-  // usos-dialog (standalone, e.g. export dialog) shadow DOM
-  injectShadowStyle(
-    ["usos-dialog"],
-    `
+    // usos-dialog (standalone, e.g. export dialog) shadow DOM
+    injectShadowStyle(
+      ["usos-dialog"],
+      `
     dialog {
       background: var(--background, #fff) !important;
       color: var(--font-color, #06022E) !important;
@@ -1887,34 +1963,34 @@ async function run(): Promise<void> {
       background: var(--background-secondary, #EFEFF1) !important;
     }
   `,
-  );
+    );
 
-  // help-dialog shadow DOM
-  injectShadowStyle(
-    ["help-dialog"],
-    `
+    // help-dialog shadow DOM
+    injectShadowStyle(
+      ["help-dialog"],
+      `
     :host {
       color: var(--font-color, #06022E) !important;
     }
   `,
-  );
+    );
 
-  // app-header (school banner) – keep text white/light regardless of --on-primary
-  injectShadowStyle(
-    ["app-header"],
-    `
+    // app-header (school banner) – keep text white/light regardless of --on-primary
+    injectShadowStyle(
+      ["app-header"],
+      `
     :host > div,
     .content,
     .content span {
       color: #ffffff !important;
     }
   `,
-  );
+    );
 
-  // usos-module-link-tile (Indeks page tiles) – readable colors in dark mode
-  injectShadowStyle(
-    ["usos-module-link-tile"],
-    `
+    // usos-module-link-tile (Indeks page tiles) – readable colors in dark mode
+    injectShadowStyle(
+      ["usos-module-link-tile"],
+      `
     a {
       color: inherit !important;
       text-decoration: none !important;
@@ -1935,45 +2011,49 @@ async function run(): Promise<void> {
       color: var(--on-background, #333) !important;
     }
   `,
-    document.body,
-    true, // useAdopted – must win over Lit's adopted stylesheets
-  );
+      document.body,
+      true, // useAdopted – must win over Lit's adopted stylesheets
+    );
 
-  injectShadowStyle(
-    ["menu-left"],
-    `
+    injectShadowStyle(
+      ["menu-left"],
+      `
   /* Hide empty separators */
   ::slotted(li:empty) { display: none !important; }
   `,
-  );
+    );
 
-  setupDashboard();
-  // Inject icons into sidebar links
-  injectSidebarIcons();
-  // Collapse older semesters in "Zajęcia studenta" and similar frames
-  collapseSemesters();
-  // Oceny / sprawdziany – ukrywanie ocen z konfetti (uruchom, jeśli jest drzewo ocen)
-  if (document.querySelector("#drzewo")) {
-    await setupHiddenGrades();
-  }
-
-  document.querySelectorAll("usos-link span").forEach((el) => {
-    if (el.textContent?.includes("więcej")) {
-      el.textContent = "Więcej";
+    setupDashboard();
+    // Inject icons into sidebar links
+    injectSidebarIcons();
+    // Collapse older semesters in "Zajęcia studenta" and similar frames
+    collapseSemesters();
+    // Oceny / sprawdziany – ukrywanie ocen z konfetti (uruchom, jeśli jest drzewo ocen)
+    if (document.querySelector("#drzewo")) {
+      await setupHiddenGrades();
     }
-  });
 
-  document.querySelectorAll("usos-link").forEach((link) => {
-    link.removeAttribute("icon-location");
-  });
-
-  // Apply global settings (banner visibility, theme)
-  if (typeof chrome !== "undefined" && chrome.storage && chrome.storage.sync) {
-    chrome.storage.sync.get("betterUsosSettings", (res) => {
-      const settings = (res?.betterUsosSettings ?? {}) as BetterUsosSettings;
-      applySettings(settings);
+    document.querySelectorAll("usos-link span").forEach((el) => {
+      if (el.textContent?.includes("więcej")) {
+        el.textContent = "Więcej";
+      }
     });
-  }
+
+    document.querySelectorAll("usos-link").forEach((link) => {
+      link.removeAttribute("icon-location");
+    });
+
+    // Apply global settings (banner visibility, theme)
+    if (
+      typeof chrome !== "undefined" &&
+      chrome.storage &&
+      chrome.storage.sync
+    ) {
+      chrome.storage.sync.get("betterUsosSettings", (res) => {
+        const settings = (res?.betterUsosSettings ?? {}) as BetterUsosSettings;
+        applySettings(settings);
+      });
+    }
   } catch (err) {
     console.warn("[Better USOS] run() error:", err);
   }
@@ -2126,321 +2206,329 @@ function addSemesterToggle(
 
 async function setupHiddenGrades(): Promise<void> {
   try {
-  const container = document.querySelector("#drzewo");
-  if (!container) return;
+    const container = document.querySelector("#drzewo");
+    if (!container) return;
 
-  const params = new URLSearchParams(window.location.search);
-  const wezId = params.get("wez_id") ?? "unknown";
-  const storageKey = `better-usos-grades-${wezId}`;
+    const params = new URLSearchParams(window.location.search);
+    const wezId = params.get("wez_id") ?? "unknown";
+    const storageKey = `better-usos-grades-${wezId}`;
 
-  const loadRevealed = async (): Promise<Set<number>> => {
-    try {
-      const res = await chrome.storage.local.get(storageKey);
-      const arr = res[storageKey] as number[] | undefined;
-      if (Array.isArray(arr)) return new Set(arr);
-    } catch {
-      /* ignore */
-    }
-    return new Set();
-  };
-
-  const saveRevealed = (set: Set<number>): void => {
-    try {
-      chrome.storage.local.set({ [storageKey]: Array.from(set) });
-    } catch {
-      // ignore
-    }
-  };
-
-  const revealed = await loadRevealed();
-
-  const gradeCells: HTMLElement[] = [];
-  container.querySelectorAll("table.grey td").forEach((td) => {
-    const strong = td.querySelector("b");
-    if (!strong) return;
-    const valueRaw = (strong.textContent ?? "").trim().replace(",", ".");
-    if (!/^[0-9]+(\.[0-9]+)?$/.test(valueRaw)) return;
-    const style = (td.getAttribute("style") ?? "").toLowerCase();
-    if (!style.includes("text-align: right")) return;
-    (td as HTMLElement).dataset.buGrade = valueRaw;
-    gradeCells.push(td as HTMLElement);
-  });
-
-  if (gradeCells.length === 0) return;
-
-  // Update total grades count in statistics
-  setTotalGrades(gradeCells.length);
-
-  /** Extract the human-readable name of the grade node from the row */
-  const getGradeName = (cell: HTMLElement): string => {
-    const row = cell.closest("tr");
-    if (!row) return "Nieznana ocena";
-    // The name is in the td with width: 200px
-    const nameTd = row.querySelector(
-      'td[style*="200px"]',
-    ) as HTMLElement | null;
-    if (!nameTd) return "Nieznana ocena";
-    // Get text content but exclude .note spans (which contain "max ..." info)
-    const clone = nameTd.cloneNode(true) as HTMLElement;
-    clone.querySelectorAll(".note").forEach((n) => n.remove());
-    const name = (clone.textContent ?? "").trim();
-    return name || "Nieznana ocena";
-  };
-
-  const pageUrl = window.location.href;
-
-  /** Extract subject name from the h1 on the grades page */
-  const getSubjectName = (): string => {
-    const h1 = document.querySelector("h1");
-    if (!h1) return "Nieznany przedmiot";
-    const link = h1.querySelector("a.wrhidden") as HTMLElement | null;
-    if (link) return (link.textContent ?? "").trim() || "Nieznany przedmiot";
-    // Fallback: try the h2 which sometimes has "2025Z Nazwa przedmiotu"
-    const h2 = document.querySelector("h2");
-    if (h2) {
-      const h2Text = (h2.textContent ?? "").trim();
-      // Strip leading semester code like "2025Z "
-      const stripped = h2Text.replace(/^\d{4}[LZ]\s+/i, "");
-      if (stripped) return stripped;
-    }
-    return "Nieznany przedmiot";
-  };
-
-  const subjectName = getSubjectName();
-
-  const fireConfetti = (cell: HTMLElement): void => {
-    const confetti = document.createElement("div");
-    confetti.className = "bu-confetti";
-    for (let i = 0; i < 10; i++) {
-      const dot = document.createElement("span");
-      dot.className = "bu-confetti-dot";
-      const angle = (Math.random() - 0.5) * Math.PI;
-      const distance = 20 + Math.random() * 30;
-      const dx = Math.cos(angle) * distance;
-      const dy = -Math.abs(Math.sin(angle) * distance);
-      dot.style.setProperty("--bu-confetti-dx", `${dx.toFixed(1)}px`);
-      dot.style.setProperty("--bu-confetti-dy", `${dy.toFixed(1)}px`);
-      dot.style.left = `${50 + (Math.random() - 0.5) * 40}%`;
-      dot.style.top = "50%";
-      confetti.appendChild(dot);
-    }
-    cell.appendChild(confetti);
-    setTimeout(() => confetti.remove(), 800);
-  };
-
-  const showYouDefeated = (): void => {
-    const overlay = document.createElement("div");
-    overlay.className = "bu-ds-overlay";
-    overlay.innerHTML = `<div class="bu-ds-text">YOU DEFEATED</div>`;
-    document.body.appendChild(overlay);
-    setTimeout(() => overlay.remove(), 1900);
-  };
-
-  const showYouFailed = (): void => {
-    const overlay = document.createElement("div");
-    overlay.className = "bu-ds-overlay bu-ds-fail";
-    overlay.innerHTML = `<div class="bu-ds-text">YOU FAILED</div>`;
-    document.body.appendChild(overlay);
-    setTimeout(() => overlay.remove(), 1900);
-  };
-
-  gradeCells.forEach((cell, index) => {
-    cell.classList.add("bu-grade-cell");
-    const strong = cell.querySelector("b");
-    if (!strong) return;
-
-    const gradeValue = parseFloat(
-      cell.dataset.buGrade ?? strong.textContent ?? "0",
-    );
-
-    const getMaxValue = (): number | null => {
-      const row = cell.closest("tr");
-      if (!row) return null;
-      // More robust: search whole row text, supports \"max\" and \"maks\"
-      const text = (row.textContent ?? "")
-        .replace(/\s+/g, " ")
-        .toLowerCase()
-        .replace(",", ".");
-      const match = text.match(/(?:max|maks)\s*([0-9]+(?:\.[0-9]+)?)/);
-      if (!match) return null;
-      const parsed = parseFloat(match[1]);
-      return Number.isNaN(parsed) ? null : parsed;
+    const loadRevealed = async (): Promise<Set<number>> => {
+      try {
+        const res = await chrome.storage.local.get(storageKey);
+        const arr = res[storageKey] as number[] | undefined;
+        if (Array.isArray(arr)) return new Set(arr);
+      } catch {
+        /* ignore */
+      }
+      return new Set();
     };
 
-    const maxValue = getMaxValue();
-    const isPerfect =
-      maxValue !== null && Math.abs(gradeValue - maxValue) < 0.005;
-    const isHigh =
-      !isPerfect &&
-      maxValue !== null &&
-      maxValue > 0 &&
-      gradeValue >= maxValue * 0.9;
-    const isLow =
-      !isPerfect &&
-      !isHigh &&
-      maxValue !== null &&
-      maxValue > 0 &&
-      gradeValue < maxValue / 2;
-    if (isPerfect) cell.dataset.buPerfect = "1";
-    if (isHigh) cell.dataset.buHigh = "1";
-    if (isLow) cell.dataset.buLow = "1";
-    if (!isPerfect && Math.abs(gradeValue) < 0.005) cell.dataset.buZero = "1";
-
-    const mask = document.createElement("span");
-    mask.className = "bu-grade-mask";
-    cell.appendChild(mask);
-
-    const isRevealed = revealed.has(index);
-    if (isRevealed) {
-      cell.classList.add("bu-grade-revealed");
-    } else {
-      cell.classList.add("bu-grade-hidden");
-    }
-
-    cell.addEventListener("click", () => {
-      // Zawsze sprawdź, czy to max / 0 / low – także po wcześniejszym odkryciu
-      const maxNow = getMaxValue();
-      const perfectNow =
-        maxNow !== null && Math.abs(gradeValue - maxNow) < 0.005;
-      const highNow =
-        !perfectNow &&
-        maxNow !== null &&
-        maxNow > 0 &&
-        gradeValue >= maxNow * 0.9;
-      const lowNow =
-        !perfectNow &&
-        !highNow &&
-        maxNow !== null &&
-        maxNow > 0 &&
-        gradeValue < maxNow / 2;
-
-      if (perfectNow) cell.dataset.buPerfect = "1";
-      if (highNow) cell.dataset.buHigh = "1";
-      if (lowNow) cell.dataset.buLow = "1";
-      if (!perfectNow && Math.abs(gradeValue) < 0.005)
-        cell.dataset.buZero = "1";
-
-      if (perfectNow) {
-        showYouDefeated();
-      } else if (Math.abs(gradeValue) < 0.005) {
-        showYouFailed();
+    const saveRevealed = (set: Set<number>): void => {
+      try {
+        chrome.storage.local.set({ [storageKey]: Array.from(set) });
+      } catch {
+        // ignore
       }
+    };
 
-      // Odsłanianie + confetti tylko za pierwszym razem
-      if (!cell.classList.contains("bu-grade-revealed")) {
-        cell.classList.remove("bu-grade-hidden");
-        cell.classList.add("bu-grade-revealed");
-        fireConfetti(cell);
-        revealed.add(index);
-        saveRevealed(revealed);
+    const revealed = await loadRevealed();
 
-        // Update statistics + earn a slot coin
-        updateStatistic("revealedCount");
-        updateStatistic("coins");
-        const maxNowForEntry = getMaxValue();
-        const gradeName = getGradeName(cell);
-        if (perfectNow) {
-          updateStatistic("defeatedCount");
-          updateStatistic("coins"); // bonus coin for defeated (+2 total)
-          addGradeEntry("defeated", {
-            name: gradeName,
-            subject: subjectName,
-            value: gradeValue,
-            max: maxNowForEntry,
-            date: Date.now(),
-            url: pageUrl,
-          });
-        } else if (Math.abs(gradeValue) < 0.005) {
-          updateStatistic("failCount");
-          addGradeEntry("fail", {
-            name: gradeName,
-            subject: subjectName,
-            value: gradeValue,
-            max: maxNowForEntry,
-            date: Date.now(),
-            url: pageUrl,
-          });
-        }
-      }
+    const gradeCells: HTMLElement[] = [];
+    container.querySelectorAll("table.grey td").forEach((td) => {
+      const strong = td.querySelector("b");
+      if (!strong) return;
+      const valueRaw = (strong.textContent ?? "").trim().replace(",", ".");
+      if (!/^[0-9]+(\.[0-9]+)?$/.test(valueRaw)) return;
+      const style = (td.getAttribute("style") ?? "").toLowerCase();
+      if (!style.includes("text-align: right")) return;
+      (td as HTMLElement).dataset.buGrade = valueRaw;
+      gradeCells.push(td as HTMLElement);
     });
-  });
 
-  // "Odsłoń wszystkie" button — only shown when there are hidden grades
-  const hiddenCells = gradeCells.filter(
-    (c) => !c.classList.contains("bu-grade-revealed"),
-  );
-  if (hiddenCells.length > 0) {
-    const revealAllBtn = document.createElement("button");
-    revealAllBtn.className = "bu-reveal-all-btn";
-    revealAllBtn.textContent = `Odsłoń wszystkie (${hiddenCells.length})`;
-    container.insertBefore(revealAllBtn, container.firstChild);
+    if (gradeCells.length === 0) return;
 
-    revealAllBtn.addEventListener("click", () => {
-      let newReveals = 0;
-      gradeCells.forEach((cell, index) => {
-        if (cell.classList.contains("bu-grade-revealed")) return;
-        cell.classList.remove("bu-grade-hidden");
-        cell.classList.add("bu-grade-revealed");
-        revealed.add(index);
-        newReveals++;
+    // Update total grades count in statistics
+    setTotalGrades(gradeCells.length);
 
-        // Silently update statistics (coins + counts, no overlays/confetti)
-        updateStatistic("revealedCount");
-        updateStatistic("coins");
+    /** Extract the human-readable name of the grade node from the row */
+    const getGradeName = (cell: HTMLElement): string => {
+      const row = cell.closest("tr");
+      if (!row) return "Nieznana ocena";
+      // The name is in the td with width: 200px
+      const nameTd = row.querySelector(
+        'td[style*="200px"]',
+      ) as HTMLElement | null;
+      if (!nameTd) return "Nieznana ocena";
+      // Get text content but exclude .note spans (which contain "max ..." info)
+      const clone = nameTd.cloneNode(true) as HTMLElement;
+      clone.querySelectorAll(".note").forEach((n) => n.remove());
+      const name = (clone.textContent ?? "").trim();
+      return name || "Nieznana ocena";
+    };
 
-        const gradeValue = parseFloat(cell.dataset.buGrade ?? "0");
+    const pageUrl = window.location.href;
+
+    /** Extract subject name from the h1 on the grades page */
+    const getSubjectName = (): string => {
+      const h1 = document.querySelector("h1");
+      if (!h1) return "Nieznany przedmiot";
+      const link = h1.querySelector("a.wrhidden") as HTMLElement | null;
+      if (link) return (link.textContent ?? "").trim() || "Nieznany przedmiot";
+      // Fallback: try the h2 which sometimes has "2025Z Nazwa przedmiotu"
+      const h2 = document.querySelector("h2");
+      if (h2) {
+        const h2Text = (h2.textContent ?? "").trim();
+        // Strip leading semester code like "2025Z "
+        const stripped = h2Text.replace(/^\d{4}[LZ]\s+/i, "");
+        if (stripped) return stripped;
+      }
+      return "Nieznany przedmiot";
+    };
+
+    const subjectName = getSubjectName();
+
+    const fireConfetti = (cell: HTMLElement): void => {
+      const confetti = document.createElement("div");
+      confetti.className = "bu-confetti";
+      for (let i = 0; i < 10; i++) {
+        const dot = document.createElement("span");
+        dot.className = "bu-confetti-dot";
+        const angle = (Math.random() - 0.5) * Math.PI;
+        const distance = 20 + Math.random() * 30;
+        const dx = Math.cos(angle) * distance;
+        const dy = -Math.abs(Math.sin(angle) * distance);
+        dot.style.setProperty("--bu-confetti-dx", `${dx.toFixed(1)}px`);
+        dot.style.setProperty("--bu-confetti-dy", `${dy.toFixed(1)}px`);
+        dot.style.left = `${50 + (Math.random() - 0.5) * 40}%`;
+        dot.style.top = "50%";
+        confetti.appendChild(dot);
+      }
+      cell.appendChild(confetti);
+      setTimeout(() => confetti.remove(), 800);
+    };
+
+    const showYouDefeated = (): void => {
+      const overlay = document.createElement("div");
+      overlay.className = "bu-ds-overlay";
+      const textDiv = document.createElement("div");
+      textDiv.className = "bu-ds-text";
+      textDiv.textContent = "YOU DEFEATED";
+      overlay.appendChild(textDiv);
+      document.body.appendChild(overlay);
+      setTimeout(() => overlay.remove(), 1900);
+    };
+
+    const showYouFailed = (): void => {
+      const overlay = document.createElement("div");
+      overlay.className = "bu-ds-overlay bu-ds-fail";
+      const textDiv = document.createElement("div");
+      textDiv.className = "bu-ds-text";
+      textDiv.textContent = "YOU FAILED";
+      overlay.appendChild(textDiv);
+      document.body.appendChild(overlay);
+      setTimeout(() => overlay.remove(), 1900);
+    };
+
+    gradeCells.forEach((cell, index) => {
+      cell.classList.add("bu-grade-cell");
+      const strong = cell.querySelector("b");
+      if (!strong) return;
+
+      const gradeValue = parseFloat(
+        cell.dataset.buGrade ?? strong.textContent ?? "0",
+      );
+
+      const getMaxValue = (): number | null => {
         const row = cell.closest("tr");
-        const rowText = (row?.textContent ?? "")
+        if (!row) return null;
+        // More robust: search whole row text, supports \"max\" and \"maks\"
+        const text = (row.textContent ?? "")
           .replace(/\s+/g, " ")
           .toLowerCase()
           .replace(",", ".");
-        const maxMatch = rowText.match(/(?:max|maks)\s*([0-9]+(?:\.[0-9]+)?)/);
-        const maxVal = maxMatch ? parseFloat(maxMatch[1]) : null;
-        const isPerfect =
-          maxVal !== null && Math.abs(gradeValue - maxVal) < 0.005;
-        const isZero = Math.abs(gradeValue) < 0.005;
+        const match = text.match(/(?:max|maks)\s*([0-9]+(?:\.[0-9]+)?)/);
+        if (!match) return null;
+        const parsed = parseFloat(match[1]);
+        return Number.isNaN(parsed) ? null : parsed;
+      };
 
-        if (isPerfect) {
-          cell.dataset.buPerfect = "1";
-          updateStatistic("defeatedCount");
-          updateStatistic("coins"); // bonus coin
-          addGradeEntry("defeated", {
-            name: getGradeName(cell),
-            subject: subjectName,
-            value: gradeValue,
-            max: maxVal,
-            date: Date.now(),
-            url: pageUrl,
-          });
-        } else if (isZero) {
-          cell.dataset.buZero = "1";
-          updateStatistic("failCount");
-          addGradeEntry("fail", {
-            name: getGradeName(cell),
-            subject: subjectName,
-            value: gradeValue,
-            max: maxVal,
-            date: Date.now(),
-            url: pageUrl,
-          });
-        } else {
-          const isHigh =
-            maxVal !== null && maxVal > 0 && gradeValue >= maxVal * 0.9;
-          const isLow =
-            maxVal !== null && maxVal > 0 && gradeValue < maxVal / 2;
-          if (isHigh) cell.dataset.buHigh = "1";
-          if (isLow) cell.dataset.buLow = "1";
-        }
-      });
+      const maxValue = getMaxValue();
+      const isPerfect =
+        maxValue !== null && Math.abs(gradeValue - maxValue) < 0.005;
+      const isHigh =
+        !isPerfect &&
+        maxValue !== null &&
+        maxValue > 0 &&
+        gradeValue >= maxValue * 0.9;
+      const isLow =
+        !isPerfect &&
+        !isHigh &&
+        maxValue !== null &&
+        maxValue > 0 &&
+        gradeValue < maxValue / 2;
+      if (isPerfect) cell.dataset.buPerfect = "1";
+      if (isHigh) cell.dataset.buHigh = "1";
+      if (isLow) cell.dataset.buLow = "1";
+      if (!isPerfect && Math.abs(gradeValue) < 0.005) cell.dataset.buZero = "1";
 
-      if (newReveals > 0) {
-        saveRevealed(revealed);
-        refreshCoinDisplay();
+      const mask = document.createElement("span");
+      mask.className = "bu-grade-mask";
+      cell.appendChild(mask);
+
+      const isRevealed = revealed.has(index);
+      if (isRevealed) {
+        cell.classList.add("bu-grade-revealed");
+      } else {
+        cell.classList.add("bu-grade-hidden");
       }
 
-      revealAllBtn.remove();
+      cell.addEventListener("click", () => {
+        // Zawsze sprawdź, czy to max / 0 / low – także po wcześniejszym odkryciu
+        const maxNow = getMaxValue();
+        const perfectNow =
+          maxNow !== null && Math.abs(gradeValue - maxNow) < 0.005;
+        const highNow =
+          !perfectNow &&
+          maxNow !== null &&
+          maxNow > 0 &&
+          gradeValue >= maxNow * 0.9;
+        const lowNow =
+          !perfectNow &&
+          !highNow &&
+          maxNow !== null &&
+          maxNow > 0 &&
+          gradeValue < maxNow / 2;
+
+        if (perfectNow) cell.dataset.buPerfect = "1";
+        if (highNow) cell.dataset.buHigh = "1";
+        if (lowNow) cell.dataset.buLow = "1";
+        if (!perfectNow && Math.abs(gradeValue) < 0.005)
+          cell.dataset.buZero = "1";
+
+        if (perfectNow) {
+          showYouDefeated();
+        } else if (Math.abs(gradeValue) < 0.005) {
+          showYouFailed();
+        }
+
+        // Odsłanianie + confetti tylko za pierwszym razem
+        if (!cell.classList.contains("bu-grade-revealed")) {
+          cell.classList.remove("bu-grade-hidden");
+          cell.classList.add("bu-grade-revealed");
+          fireConfetti(cell);
+          revealed.add(index);
+          saveRevealed(revealed);
+
+          // Update statistics + earn a slot coin
+          updateStatistic("revealedCount");
+          updateStatistic("coins");
+          const maxNowForEntry = getMaxValue();
+          const gradeName = getGradeName(cell);
+          if (perfectNow) {
+            updateStatistic("defeatedCount");
+            updateStatistic("coins"); // bonus coin for defeated (+2 total)
+            addGradeEntry("defeated", {
+              name: gradeName,
+              subject: subjectName,
+              value: gradeValue,
+              max: maxNowForEntry,
+              date: Date.now(),
+              url: pageUrl,
+            });
+          } else if (Math.abs(gradeValue) < 0.005) {
+            updateStatistic("failCount");
+            addGradeEntry("fail", {
+              name: gradeName,
+              subject: subjectName,
+              value: gradeValue,
+              max: maxNowForEntry,
+              date: Date.now(),
+              url: pageUrl,
+            });
+          }
+        }
+      });
     });
-  }
+
+    // "Odsłoń wszystkie" button — only shown when there are hidden grades
+    const hiddenCells = gradeCells.filter(
+      (c) => !c.classList.contains("bu-grade-revealed"),
+    );
+    if (hiddenCells.length > 0) {
+      const revealAllBtn = document.createElement("button");
+      revealAllBtn.className = "bu-reveal-all-btn";
+      revealAllBtn.textContent = `Odsłoń wszystkie (${hiddenCells.length})`;
+      container.insertBefore(revealAllBtn, container.firstChild);
+
+      revealAllBtn.addEventListener("click", () => {
+        let newReveals = 0;
+        gradeCells.forEach((cell, index) => {
+          if (cell.classList.contains("bu-grade-revealed")) return;
+          cell.classList.remove("bu-grade-hidden");
+          cell.classList.add("bu-grade-revealed");
+          revealed.add(index);
+          newReveals++;
+
+          // Silently update statistics (coins + counts, no overlays/confetti)
+          updateStatistic("revealedCount");
+          updateStatistic("coins");
+
+          const gradeValue = parseFloat(cell.dataset.buGrade ?? "0");
+          const row = cell.closest("tr");
+          const rowText = (row?.textContent ?? "")
+            .replace(/\s+/g, " ")
+            .toLowerCase()
+            .replace(",", ".");
+          const maxMatch = rowText.match(
+            /(?:max|maks)\s*([0-9]+(?:\.[0-9]+)?)/,
+          );
+          const maxVal = maxMatch ? parseFloat(maxMatch[1]) : null;
+          const isPerfect =
+            maxVal !== null && Math.abs(gradeValue - maxVal) < 0.005;
+          const isZero = Math.abs(gradeValue) < 0.005;
+
+          if (isPerfect) {
+            cell.dataset.buPerfect = "1";
+            updateStatistic("defeatedCount");
+            updateStatistic("coins"); // bonus coin
+            addGradeEntry("defeated", {
+              name: getGradeName(cell),
+              subject: subjectName,
+              value: gradeValue,
+              max: maxVal,
+              date: Date.now(),
+              url: pageUrl,
+            });
+          } else if (isZero) {
+            cell.dataset.buZero = "1";
+            updateStatistic("failCount");
+            addGradeEntry("fail", {
+              name: getGradeName(cell),
+              subject: subjectName,
+              value: gradeValue,
+              max: maxVal,
+              date: Date.now(),
+              url: pageUrl,
+            });
+          } else {
+            const isHigh =
+              maxVal !== null && maxVal > 0 && gradeValue >= maxVal * 0.9;
+            const isLow =
+              maxVal !== null && maxVal > 0 && gradeValue < maxVal / 2;
+            if (isHigh) cell.dataset.buHigh = "1";
+            if (isLow) cell.dataset.buLow = "1";
+          }
+        });
+
+        if (newReveals > 0) {
+          saveRevealed(revealed);
+          refreshCoinDisplay();
+        }
+
+        revealAllBtn.remove();
+      });
+    }
   } catch (err) {
     console.warn("[Better USOS] setupHiddenGrades error:", err);
   }
