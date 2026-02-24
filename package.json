@@ -24,6 +24,16 @@
     "typescript": "5.7.2"
   },
   "manifest": {
+    "web_accessible_resources": [
+      {
+        "resources": [
+          "assets/*.ttf"
+        ],
+        "matches": [
+          "https://*.edu.pl/*"
+        ]
+      }
+    ],
     "permissions": [
       "storage"
     ],

@@ -261,7 +261,15 @@ function showStatsModal(type: "defeated" | "fail"): void {
   const body = document.createElement("div");
   body.className = "bu-modal-body";
   // Safe: buildEntryListHTML używa escapeHTML
-  body.insertAdjacentHTML("afterbegin", buildEntryListHTML(entries, isDefeated ? "Brak defeated ocen – odsłoń oceny ze sprawdzianów!" : "Brak failed ocen – tak trzymaj!"));
+  body.insertAdjacentHTML(
+    "afterbegin",
+    buildEntryListHTML(
+      entries,
+      isDefeated
+        ? "Brak defeated ocen – odsłoń oceny ze sprawdzianów!"
+        : "Brak failed ocen – tak trzymaj!",
+    ),
+  );
   modal.appendChild(body);
   overlay.appendChild(modal);
 
@@ -574,7 +582,8 @@ function setupDashboard(): void {
     const statsTitle = document.createElement("span");
     statsTitle.className = "bu-stats-title";
     // Safe: static SVG only
-    statsTitle.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -3px; margin-right: 6px;"><path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="m7 11 4-4 4 4 6-6"/></svg>Statystyki ocen';
+    statsTitle.innerHTML =
+      '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -3px; margin-right: 6px;"><path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="m7 11 4-4 4 4 6-6"/></svg>Statystyki ocen';
     statsHeader.appendChild(statsTitle);
     statsPanel.appendChild(statsHeader);
     const statsContent = document.createElement("div");
@@ -594,13 +603,16 @@ function setupDashboard(): void {
     const slotTitle = document.createElement("span");
     slotTitle.className = "bu-slot-title";
     // Safe: static SVG only
-    slotTitle.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -3px; margin-right: 6px;"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M12 4v16"/><path d="M2 12h20"/><circle cx="7" cy="8" r="1.5" fill="currentColor" stroke="none"/><circle cx="17" cy="8" r="1.5" fill="currentColor" stroke="none"/><circle cx="7" cy="16" r="1.5" fill="currentColor" stroke="none"/><circle cx="17" cy="16" r="1.5" fill="currentColor" stroke="none"/></svg>Jednoręki bandyta';
+    slotTitle.innerHTML =
+      '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -3px; margin-right: 6px;"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M12 4v16"/><path d="M2 12h20"/><circle cx="7" cy="8" r="1.5" fill="currentColor" stroke="none"/><circle cx="17" cy="8" r="1.5" fill="currentColor" stroke="none"/><circle cx="7" cy="16" r="1.5" fill="currentColor" stroke="none"/><circle cx="17" cy="16" r="1.5" fill="currentColor" stroke="none"/></svg>Jednoręki bandyta';
     slotHeader.appendChild(slotTitle);
     const coinsBadge = document.createElement("span");
     coinsBadge.className = "bu-slot-coins-badge";
-    coinsBadge.title = "Monety – zdobywasz 1 za każde odsłonięcie oceny, 2 za DEFEATED";
+    coinsBadge.title =
+      "Monety – zdobywasz 1 za każde odsłonięcie oceny, 2 za DEFEATED";
     // Safe: static SVG only
-    coinsBadge.innerHTML = '<svg class="bu-coin-icon" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10" stroke-width="2"/><path d="M12 6v12" stroke-width="1.8"/><path d="M15 9.5c0-1.1-1.3-2-3-2s-3 .9-3 2c0 1.1 1.3 2 3 2.5s3 1.4 3 2.5c0 1.1-1.3 2-3 2s-3-.9-3-2" stroke-width="1.8"/></svg>';
+    coinsBadge.innerHTML =
+      '<svg class="bu-coin-icon" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10" stroke-width="2"/><path d="M12 6v12" stroke-width="1.8"/><path d="M15 9.5c0-1.1-1.3-2-3-2s-3 .9-3 2c0 1.1 1.3 2 3 2.5s3 1.4 3 2.5c0 1.1-1.3 2-3 2s-3-.9-3-2" stroke-width="1.8"/></svg>';
     const coinsSpan = document.createElement("span");
     coinsSpan.id = "bu-slot-coins";
     coinsSpan.textContent = String(stats.coins);
@@ -2308,26 +2320,44 @@ async function setupHiddenGrades(): Promise<void> {
       setTimeout(() => confetti.remove(), 800);
     };
 
+    const showDarkSoulsNotification = (text: string): void => {
+      const container = document.createElement("div");
+      container.classList.add("bu-ds-notification-screen");
+      let glow = "";
+      // adding glow effect
+      for (let i = 0; i < 8; i++) {
+        const time = (8 + i / 2).toFixed(1);
+        const delay = (i / 15).toFixed(1);
+        glow += `<span style="animation-duration: ${time}s; animation-delay: ${delay}s;" class="bu-ds-notification-glow">${text}</span>`;
+      }
+      container.innerHTML = `
+        <div class="bu-ds-notification-bg"></div>
+        <div style="position:relative;">
+            <span class="bu-ds-notification-title">${text}</span>
+            ${glow}
+        </div>
+      `;
+      document.body.appendChild(container);
+
+      setTimeout(() => {
+        container.classList.add("bu-ds-notification-hide");
+
+        setTimeout(() => {
+          // cleanup
+          if (container.parentNode) {
+            container.parentNode.removeChild(container);
+          }
+          // 10 secs cooldown - ready to receive next message
+        }, 10000);
+      }, 5000);
+    };
+
     const showYouDefeated = (): void => {
-      const overlay = document.createElement("div");
-      overlay.className = "bu-ds-overlay";
-      const textDiv = document.createElement("div");
-      textDiv.className = "bu-ds-text";
-      textDiv.textContent = "YOU DEFEATED";
-      overlay.appendChild(textDiv);
-      document.body.appendChild(overlay);
-      setTimeout(() => overlay.remove(), 1900);
+      showDarkSoulsNotification("YOU DEFEATED");
     };
 
     const showYouFailed = (): void => {
-      const overlay = document.createElement("div");
-      overlay.className = "bu-ds-overlay bu-ds-fail";
-      const textDiv = document.createElement("div");
-      textDiv.className = "bu-ds-text";
-      textDiv.textContent = "YOU FAILED";
-      overlay.appendChild(textDiv);
-      document.body.appendChild(overlay);
-      setTimeout(() => overlay.remove(), 1900);
+      showDarkSoulsNotification("YOU FAILED");
     };
 
     gradeCells.forEach((cell, index) => {
