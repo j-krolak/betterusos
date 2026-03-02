@@ -245,6 +245,10 @@ function readNavData(): {
 }
 
 function BetterUsosNavbar() {
+  if (!/^usosweb\.[^.]+\.edu\.pl$/.test(location.hostname)) {
+    return null;
+  }
+
   const [navItems, setNavItems] = useState<NavItem[]>([]);
   const [user, setUser] = useState("");
   const [loginUrl, setLoginUrl] = useState("");
